@@ -1,4 +1,4 @@
-# Kilo Gateway Spring Boot Starter (v0.2.1)
+# Kilo Gateway Spring Boot Starter (v0.2.2)
 
 供多个 Spring Boot 项目依赖的 Kilo Gateway 客户端，直接访问 `https://ai-gateway.kilo.ai/api/v1`，**不依赖 Kilo Code、OpenCode 或其他本地 Maven 仓库**。
 
@@ -18,8 +18,8 @@
 
    ```powershell
    git add .
-   git commit -m "Release 0.2.1"
-   git tag v0.2.1
+   git commit -m "Release 0.2.2"
+   git tag v0.2.2
    git push origin main --tags
    ```
 
@@ -51,7 +51,7 @@ repositories {
     }
 }
 dependencies {
-    implementation("com.sharedlibs:kilo-gateway-spring-boot-starter:0.2.1")
+    implementation("com.sharedlibs:kilo-gateway-spring-boot-starter:0.2.2")
 }
 ```
 
@@ -75,7 +75,7 @@ Remove-Item Env:KILO_GITHUB_TOKEN
 ### B. 公开 GitHub 仓库 + JitPack —— 最省事、消费者免 Token
 
 1. 将 **新的** `kilo-gateway` 仓库设为 Public（不要把包含内部协议、密钥或其他敏感源码的 `opencode-zen` 公开）。
-2. 推送源码并创建 `v0.2.1` tag，访问 https://jitpack.io/#BangShou1st/kilo-gateway ，Look Up 版本并查看首次构建结果。`jitpack.yml` 负责在 **JitPack 服务器上** 使用 JDK 21 + Gradle 8.9；其中的 `publishToMavenLocal` 是 JitPack 构建服务内部的要求，**不是你本机或任何消费者使用 `mavenLocal()`**。
+2. 推送源码并创建 `v0.2.2` tag，访问 https://jitpack.io/#BangShou1st/kilo-gateway ，Look Up 版本并查看首次构建结果。`jitpack.yml` 负责在 **JitPack 服务器上** 使用 JDK 21 + Gradle 8.9；其中的 `publishToMavenLocal` 是 JitPack 构建服务内部的要求，**不是你本机或任何消费者使用 `mavenLocal()`**。
 3. JitPack build 成功后，消费项目不需要 GitHub PAT，只需仓库和依赖：
 
 ```kotlin
@@ -84,11 +84,11 @@ repositories {
     maven { url = uri("https://jitpack.io") }
 }
 dependencies {
-    implementation("com.github.BangShou1st.kilo-gateway:kilo-gateway-spring-boot-starter:v0.2.1")
+    implementation("com.github.BangShou1st.kilo-gateway:kilo-gateway-spring-boot-starter:v0.2.2")
 }
 ```
 
-> 注意：GitHub Packages 和 JitPack 的 group 坐标不同。此项目根脚本在 JitPack 环境下按其 `GROUP` / `ARTIFACT` / `VERSION` 环境变量设置 group 与 version，GitHub Packages 仍用 `com.sharedlibs:...:0.2.1`。JitPack 成功出包之前，上述依赖坐标仅是**拟使用的坐标**，尚未可下载。
+> 注意：GitHub Packages 和 JitPack 的 group 坐标不同。此项目根脚本在 JitPack 环境下按其 `GROUP` / `ARTIFACT` / `VERSION` 环境变量设置 group 与 version，GitHub Packages 仍用 `com.sharedlibs:...:0.2.2`。JitPack 成功出包之前，上述依赖坐标仅是**拟使用的坐标**，尚未可下载。
 
 ### JitPack 构建出现 Maven Central HTTP 429？
 
@@ -138,6 +138,10 @@ public class AiService {
 - 构建/发布配置与 Java 源码静态检查，可通过 CI/JitPack 执行 `test` 和远程发布。
 - v0.2.0 曾在 GitHub Actions 完成测试并成功发布 GitHub Packages，但 JitPack 首次构建因 Maven Central HTTP 429 失败。
 - v0.2.1 镜像策略通过 CI 后仍需在 JitPack 实际构建验证；本地环境无法直接下载外部构建依赖。
+- v0.2.2 补上流式完成校验：`streamChat()` 只有观察到上游终止哨兵 `data: [DONE]` 才算成功；
+  读取 EOF 而无该哨兵、中途出现错误帧、或帧无法解析，都抛 `KiloGatewayException`
+  （完成缺失为 `KiloGatewayException.STATUS_INCOMPLETE_STREAM`，且 `isTransientUpstreamError()` 为 false）。
+  消费方不应在未完成流上当作成功；库不会在已输出分片后重放或切换模型。
 - 旧版 Java 核心代码已做过桩依赖编译检查；新版主要修改了构建/交付渠道，没有替换 API 客户端实现。
 
 参考：GitHub Packages Gradle registry: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-gradle-registry ；JitPack 多模块: https://docs.jitpack.io/building/ 。

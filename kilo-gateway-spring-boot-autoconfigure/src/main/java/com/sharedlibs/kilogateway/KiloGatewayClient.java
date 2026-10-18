@@ -122,7 +122,16 @@ public final class KiloGatewayClient {
         throw Objects.requireNonNull(last);
     }
 
-    /** Stream JSON SSE chunks. Does not replay partial output after the first chunk. */
+    /**
+     * Stream JSON SSE chunks. Does not replay partial output after the first chunk.
+     *
+     * <p>A stream is only complete when the upstream sends the SSE completion sentinel
+     * ({@code data: [DONE]}). Reading EOF without that sentinel — or a mid-stream error frame, or an
+     * undecodable frame — fails with {@link KiloGatewayException}: a truncated stream is never
+     * reported as success. Completion failures use
+     * {@link KiloGatewayException#STATUS_INCOMPLETE_STREAM} and are never transient, so they cannot
+     * be retried or failed over after partial output has already been delivered.</p>
+     */
     public void streamChat(ObjectNode request, Consumer<JsonNode> onChunk) {
         Objects.requireNonNull(onChunk, "onChunk");
         ObjectNode body = prepare(request, true);
@@ -142,27 +151,56 @@ public final class KiloGatewayClient {
                     last = error;
                     continue;
                 }
-                SseFrameDecoder decoder = new SseFrameDecoder();
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        var frame = decoder.accept(line);
-                        if (frame.isPresent() && emit(frame.get(), onChunk)) return;
-                    }
-                    decoder.finish().ifPresent(data -> emit(data, onChunk));
+                if (!consume(input, onChunk)) {
+                    throw new KiloGatewayException(KiloGatewayException.STATUS_INCOMPLETE_STREAM, "",
+                            "Kilo SSE stream ended without the [DONE] completion signal");
                 }
                 return;
             } catch (IOException error) {
-                throw new KiloGatewayException(-1, "", "Streaming I/O failure", error);
+                throw new KiloGatewayException(KiloGatewayException.STATUS_TRANSPORT, "",
+                        "Streaming I/O failure", error);
             }
         }
         throw Objects.requireNonNull(last);
     }
 
+    /**
+     * Reads SSE frames until the completion sentinel.
+     *
+     * @return {@code true} when {@code [DONE]} was observed (including a final frame flushed at EOF
+     *         without a trailing blank line); {@code false} when the stream ended without it.
+     */
+    private boolean consume(InputStream input, Consumer<JsonNode> onChunk) throws IOException {
+        SseFrameDecoder decoder = new SseFrameDecoder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                var frame = decoder.accept(line);
+                if (frame.isPresent() && emit(frame.get(), onChunk)) return true;
+            }
+            var tail = decoder.finish();
+            return tail.isPresent() && emit(tail.get(), onChunk);
+        }
+    }
+
     private boolean emit(String frame, Consumer<JsonNode> onChunk) {
         if ("[DONE]".equals(frame.trim())) return true;
-        if (!frame.isBlank()) onChunk.accept(decode(frame));
+        if (frame.isBlank()) return false;
+        JsonNode chunk = decode(frame);
+        JsonNode error = chunk.path("error");
+        if (!error.isMissingNode() && !error.isNull()) throw errorFrame(error, frame);
+        onChunk.accept(chunk);
         return false;
+    }
+
+    /** Mid-stream provider error frame: never transient, so partial output is not replayed. */
+    private KiloGatewayException errorFrame(JsonNode error, String rawFrame) {
+        String provider = error.path("metadata").path("provider_name").asText("");
+        String message = error.path("message").asText("");
+        if (message.isEmpty()) message = rawFrame;
+        if (message.length() > 400) message = message.substring(0, 400);
+        return new KiloGatewayException(KiloGatewayException.STATUS_TRANSPORT, provider,
+                "Kilo SSE error frame" + (provider.isEmpty() ? "" : " (" + provider + ")") + ": " + message);
     }
 
     private ObjectNode prepare(ObjectNode request, boolean stream) {
@@ -223,9 +261,11 @@ public final class KiloGatewayClient {
             return http.send(request, handler);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            throw new KiloGatewayException(-1, "", "Kilo API request interrupted", error);
+            throw new KiloGatewayException(KiloGatewayException.STATUS_TRANSPORT, "",
+                    "Kilo API request interrupted", error);
         } catch (IOException error) {
-            throw new KiloGatewayException(-1, "", "Kilo API connection failed", error);
+            throw new KiloGatewayException(KiloGatewayException.STATUS_TRANSPORT, "",
+                    "Kilo API connection failed", error);
         }
     }
 
@@ -249,7 +289,8 @@ public final class KiloGatewayClient {
         try {
             return json.readTree(raw);
         } catch (JsonProcessingException error) {
-            throw new KiloGatewayException(-1, "", "Invalid JSON returned by Kilo API", error);
+            throw new KiloGatewayException(KiloGatewayException.STATUS_TRANSPORT, "",
+                    "Invalid JSON returned by Kilo API", error);
         }
     }
 

@@ -2,6 +2,7 @@ package com.sharedlibs.kilogateway;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sharedlibs.kilogateway.autoconfigure.KiloGatewayProperties;
@@ -93,6 +94,86 @@ class KiloGatewayClientTest {
         new KiloGatewayClient(props).streamChat(req, item ->
                 chunks.add(item.path("choices").path(0).path("delta").path("content").asText()));
         assertThat(chunks).containsExactly("O", "K");
+    }
+
+    @Test void doneFlushedAtEofWithoutTrailingBlankLineStillCompletes() {
+        server.createContext("/chat/completions", exchange -> {
+            exchange.getRequestBody().close();
+            respond(exchange, 200,
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"}}]}\n\ndata: [DONE]\n");
+        });
+        server.start();
+        List<String> chunks = new ArrayList<>();
+        new KiloGatewayClient(props).streamChat(streamRequest(), item ->
+                chunks.add(item.path("choices").path(0).path("delta").path("content").asText()));
+        assertThat(chunks).containsExactly("OK");
+    }
+
+    @Test void eofWithoutDoneIsAnIncompleteStreamFailure() {
+        server.createContext("/chat/completions", exchange -> {
+            exchange.getRequestBody().close();
+            respond(exchange, 200,
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n");
+        });
+        server.start();
+        List<JsonNode> chunks = new ArrayList<>();
+        assertThatThrownBy(() -> new KiloGatewayClient(props).streamChat(streamRequest(), chunks::add))
+                .isInstanceOfSatisfying(KiloGatewayException.class, failure -> {
+                    assertThat(failure.getStatusCode())
+                            .isEqualTo(KiloGatewayException.STATUS_INCOMPLETE_STREAM);
+                    assertThat(failure.isIncompleteStream()).isTrue();
+                    assertThat(failure.isTransientUpstreamError()).isFalse();
+                });
+        assertThat(chunks).hasSize(1);
+    }
+
+    @Test void incompleteStreamIsNeverFailedOverToAnotherModel() {
+        props.setFallbackModels(List.of("cohere/north-mini-code:free"));
+        server.createContext("/chat/completions", exchange -> {
+            exchange.getRequestBody().close();
+            calls.incrementAndGet();
+            respond(exchange, 200, "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n");
+        });
+        server.start();
+        assertThatThrownBy(() -> new KiloGatewayClient(props).streamChat(streamRequest(), item -> { }))
+                .isInstanceOf(KiloGatewayException.class);
+        assertThat(calls.get()).isEqualTo(1);
+    }
+
+    @Test void midStreamErrorFrameFailsWithoutReplayingEarlierOutput() {
+        server.createContext("/chat/completions", exchange -> {
+            exchange.getRequestBody().close();
+            respond(exchange, 200,
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"O\"}}]}\n\n"
+                    + "data: {\"error\":{\"message\":\"upstream exploded\",\"metadata\":{\"provider_name\":\"Nvidia\"}}}\n\n"
+                    + "data: [DONE]\n\n");
+        });
+        server.start();
+        List<JsonNode> chunks = new ArrayList<>();
+        assertThatThrownBy(() -> new KiloGatewayClient(props).streamChat(streamRequest(), chunks::add))
+                .isInstanceOfSatisfying(KiloGatewayException.class, failure -> {
+                    assertThat(failure.getStatusCode()).isEqualTo(KiloGatewayException.STATUS_TRANSPORT);
+                    assertThat(failure.getProvider()).isEqualTo("Nvidia");
+                    assertThat(failure.isTransientUpstreamError()).isFalse();
+                });
+        assertThat(chunks).hasSize(1);
+    }
+
+    @Test void undecodableFrameFailsTheStream() {
+        server.createContext("/chat/completions", exchange -> {
+            exchange.getRequestBody().close();
+            respond(exchange, 200, "data: {not-json\n\n");
+        });
+        server.start();
+        assertThatThrownBy(() -> new KiloGatewayClient(props).streamChat(streamRequest(), item -> { }))
+                .isInstanceOfSatisfying(KiloGatewayException.class, failure ->
+                        assertThat(failure.getStatusCode()).isEqualTo(KiloGatewayException.STATUS_TRANSPORT));
+    }
+
+    private ObjectNode streamRequest() {
+        ObjectNode req = mapper.createObjectNode();
+        req.putArray("messages").addObject().put("role", "user").put("content", "hi");
+        return req;
     }
 
     private static void respond(com.sun.net.httpserver.HttpExchange exchange, int code, String body)
