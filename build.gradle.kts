@@ -11,9 +11,9 @@ group = if (onJitPack) {
     "com.sharedlibs"
 }
 version = if (onJitPack) {
-    System.getenv("VERSION")?.takeIf { it.isNotBlank() } ?: "v0.2.2"
+    System.getenv("VERSION")?.takeIf { it.isNotBlank() } ?: "v0.2.3"
 } else {
-    "0.2.2"
+    "0.2.3"
 }
 
 subprojects {

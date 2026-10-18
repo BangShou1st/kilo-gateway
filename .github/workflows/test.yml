@@ -27,5 +27,5 @@ jobs:
           JITPACK: "true"
           GROUP: "com.github.BangShou1st"
           ARTIFACT: "kilo-gateway"
-          VERSION: "v0.2.2"
+          VERSION: "v0.2.3"
         run: gradle --no-daemon clean test
