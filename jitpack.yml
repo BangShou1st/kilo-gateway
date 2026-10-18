@@ -1,0 +1,8 @@
+# Optional path: only for a PUBLIC GitHub repository + token-free consumers.
+# JitPack builds with JDK 21 and Gradle 8.9 remotely. No local consumer mavenLocal().
+jdk:
+  - openjdk21
+before_install:
+  - sdk install gradle 8.9
+install:
+  - gradle --no-daemon clean test publishToMavenLocal
