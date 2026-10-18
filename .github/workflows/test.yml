@@ -22,3 +22,10 @@ jobs:
           gradle-version: '8.9'
       - name: Test
         run: gradle --no-daemon clean test
+      - name: Test JitPack mirror configuration
+        env:
+          JITPACK: "true"
+          GROUP: "com.github.BangShou1st"
+          ARTIFACT: "kilo-gateway"
+          VERSION: "v0.2.1"
+        run: gradle --no-daemon clean test
