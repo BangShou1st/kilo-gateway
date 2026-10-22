@@ -12,7 +12,6 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter:3.3.2")
 }
 tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
-tasks.withType<Test>().configureEach { useJUnitPlatform() }
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {

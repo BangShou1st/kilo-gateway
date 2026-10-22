@@ -1,4 +1,4 @@
-name: Test Java Starter
+name: Build Java Starter
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,12 +20,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Test
-        run: gradle --no-daemon clean test
-      - name: Test JitPack mirror configuration
+      - name: Build
+        run: gradle --no-daemon clean build
+      - name: Build with JitPack mirror configuration
         env:
           JITPACK: "true"
           GROUP: "com.github.BangShou1st"
           ARTIFACT: "kilo-gateway"
           VERSION: "v0.2.3"
-        run: gradle --no-daemon clean test
+        run: gradle --no-daemon clean build

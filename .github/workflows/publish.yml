@@ -27,7 +27,7 @@ jobs:
           EXPECTED="$(gradle --quiet printProjectVersion)"
           test -n "$EXPECTED"
           test "$GITHUB_REF_NAME" = "v$EXPECTED"
-      - name: Test and publish (no local scripts or personal token)
+      - name: Build and publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gradle --no-daemon clean test publish
+        run: gradle --no-daemon clean build publish

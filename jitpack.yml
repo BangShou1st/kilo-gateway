@@ -5,4 +5,4 @@ jdk:
 before_install:
   - sdk install gradle 8.9
 install:
-  - gradle --no-daemon clean test publishToMavenLocal
+  - gradle --no-daemon clean build publishToMavenLocal
