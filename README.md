@@ -1,28 +1,45 @@
-# Kilo Gateway
+<div align="center">
 
-A lightweight Spring Boot starter for the Kilo AI Gateway. OpenAI-compatible chat, SSE streaming, and model discovery using the JDK HTTP client and Jackson.
+# Kilo Gateway for Java
+
+A Spring Boot starter for the Kilo AI Gateway.
 
 [![Build](https://github.com/BangShou1st/kilo-gateway/actions/workflows/test.yml/badge.svg)](https://github.com/BangShou1st/kilo-gateway/actions/workflows/test.yml)
+![Java 21](https://img.shields.io/badge/Java-21-orange?logo=openjdk)
+![Spring Boot 3.3.2](https://img.shields.io/badge/Spring_Boot-3.3.2-6DB33F?logo=springboot&logoColor=white)
 [![JitPack](https://jitpack.io/v/BangShou1st/kilo-gateway.svg)](https://jitpack.io/#BangShou1st/kilo-gateway)
-[![Java 21](https://img.shields.io/badge/Java-21-orange)](#requirements)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-English · [简体中文](README.zh-CN.md)
+**English** · [简体中文](README.zh-CN.md)
 
-- Inject a ready-to-use `KiloGatewayClient` into your Spring services.
-- Preserve full JSON requests and responses, including tool calls and metadata.
-- Restrict requests to free model IDs by default, with optional ordered fallback on upstream server errors.
-- Detect truncated SSE streams instead of treating partial output as a complete response.
+[Quick start](#quick-start) · [Usage](#usage) · [Configuration](#configuration) · [Development](#development)
 
-## Requirements
+</div>
 
-Java 21 and Spring Boot 3.3.2 (the version used to build this starter). No Kilo Code or OpenCode installation is required.
+Call the Kilo AI Gateway from Java through its OpenAI-compatible API. The starter provides an auto-configured client for chat, streaming, and model discovery, built on the JDK HTTP client and Jackson. No Kilo Code or OpenCode installation is required.
 
-## Installation
+## Features
 
-### JitPack
+- **Spring Boot integration** — inject `KiloGatewayClient`, or provide your own bean to override the default.
+- **Full chat requests** — preserve message history, tool definitions, and response metadata, with both text and JSON APIs.
+- **SSE streaming** — receive JSON chunks with completion checks and detection of truncated streams, error frames, and malformed JSON.
+- **Free-model policies** — free model ID validation by default, plus catalog and free-entry discovery.
+- **Ordered fallback** — optional alternatives on upstream HTTP 500/502/503/504. No automatic retries or model switching on HTTP 401/403/429.
+- **Explicit networking** — configurable connection and request timeouts, optional HTTP proxy, and HTTPS by default.
 
-Add the repository and starter to your Gradle Kotlin build:
+Tool execution, credential storage, and application workflows belong to the consuming application.
+
+## Quick start
+
+### Requirements
+
+- Java 21 or later.
+- Spring Boot dependencies are built against **3.3.2**; other versions should be verified in your application.
+- Artifacts are distributed through **JitPack**. The documented version is **`v0.2.3`**, including the leading `v`.
+
+### Install
+
+**Gradle Kotlin DSL**
 
 ```kotlin
 repositories {
@@ -36,6 +53,25 @@ dependencies {
 ```
 
 Public JitPack artifacts require no download credentials. If your build manages repositories in `settings.gradle.kts`, add the JitPack repository there instead.
+
+**Maven**
+
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.github.BangShou1st.kilo-gateway</groupId>
+        <artifactId>kilo-gateway-spring-boot-starter</artifactId>
+        <version>v0.2.3</version>
+    </dependency>
+</dependencies>
+```
 
 <details>
 <summary>Alternative: GitHub Packages</summary>
@@ -56,7 +92,7 @@ Store `kiloRepoUser` and `kiloRepoToken` in your user-level `~/.gradle/gradle.pr
 
 </details>
 
-## Quick start
+### Send a chat request
 
 The starter registers a client automatically. Inject it into a service:
 
@@ -89,7 +125,9 @@ kilo:
 
 This is the library's default model ID; availability and pricing are controlled by the upstream service. Use `models()` or `freeModels()` to inspect its catalog. Free-ID matching is a local policy, not a billing guarantee.
 
-## Client API
+## Usage
+
+### Client methods
 
 | Method | Result |
 | --- | --- |
@@ -119,6 +157,14 @@ client.streamChat(request, chunk -> {
 
 The two calls above send separate requests. Add message history, tool definitions, or other supported fields directly to the request. The client copies it before setting its model and stream flag. Tool execution remains the caller's responsibility.
 
+### Credentials, networking, and errors
+
+- **Authentication:** an empty API key sends no `Authorization` header. A configured key is sent with every gateway request. Non-free models require both `free-only: false` and an API key.
+- **Fallback:** only HTTP 500, 502, 503, and 504 advance to the next configured model. Authentication errors, rate limits, and transport failures propagate immediately. Without fallback models there is one attempt.
+- **Streaming:** success requires `data: [DONE]`. EOF without it raises `KiloGatewayException` with `STATUS_INCOMPLETE_STREAM`. Error frames and malformed JSON also fail the stream. Partial output is never replayed against another model.
+- **Transport:** HTTPS is required, with HTTP permitted for loopback addresses. Redirects are disabled.
+- **Errors:** `KiloGatewayException` exposes the status code and provider name when supplied by the gateway. A tool-only response can legitimately produce an empty string from `ask()`; use `chat()` to inspect the full response.
+
 ## Configuration
 
 All properties use the `kilo.gateway` prefix.
@@ -138,23 +184,22 @@ All properties use the `kilo.gateway` prefix.
 
 Providing your own `KiloGatewayClient` bean replaces the default. Set `enabled: false` to disable this auto-configuration.
 
-## Request behavior
+## Project structure
 
-- **Authentication:** an empty API key sends no `Authorization` header. A configured key is sent with every gateway request. Non-free models require both `free-only: false` and an API key.
-- **Fallback:** only HTTP 500, 502, 503, and 504 advance to the next configured model. Authentication errors, rate limits, and transport failures propagate immediately. Without fallback models there is one attempt.
-- **Streaming:** success requires `data: [DONE]`. EOF without it raises `KiloGatewayException` with `STATUS_INCOMPLETE_STREAM`. Error frames and malformed JSON also fail the stream. Partial output is never replayed against another model.
-- **Transport:** HTTPS is required, with HTTP permitted for loopback addresses. Redirects are disabled.
-- **Errors:** `KiloGatewayException` exposes the status code and provider name when supplied by the gateway. A tool-only response can legitimately produce an empty string from `ask()`; use `chat()` to inspect the full response.
+| Module | Purpose |
+| --- | --- |
+| [`kilo-gateway-spring-boot-starter`](kilo-gateway-spring-boot-starter) | Dependency entry point for Spring Boot applications. |
+| [`kilo-gateway-spring-boot-autoconfigure`](kilo-gateway-spring-boot-autoconfigure) | HTTP client, free-model policy, SSE decoding, properties, and auto-configuration. |
 
-## Build from source
+## Development
 
-With JDK 21 and Gradle 8.9 installed:
-
-```sh
+```bash
+git clone https://github.com/BangShou1st/kilo-gateway.git
+cd kilo-gateway
 gradle --no-daemon clean build
 ```
 
-The project has two modules: `kilo-gateway-spring-boot-autoconfigure` contains the client and configuration; `kilo-gateway-spring-boot-starter` is the dependency entry point.
+Requires JDK 21 and Gradle 8.9. Gradle may download build dependencies; the build makes no Kilo AI Gateway API calls. For changes, keep both README files aligned and include behavior changes and verification performed in your pull request.
 
 ## License
 
