@@ -16,7 +16,7 @@
 
 </div>
 
-通过 Java 调用 Kilo AI Gateway 的兼容 OpenAI 接口。Starter 自动装配客户端，提供对话、流式响应和模型查询；底层使用 JDK HTTP Client 与 Jackson，无需安装 Kilo Code 或 OpenCode。
+通过 Java 调用 Kilo AI Gateway 的兼容 OpenAI 接口。Starter 自动装配客户端，提供对话、流式响应和模型查询；底层使用 JDK HTTP Client 与 Jackson。
 
 ## 功能
 

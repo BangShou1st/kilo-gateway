@@ -16,7 +16,7 @@ A Spring Boot starter for the Kilo AI Gateway.
 
 </div>
 
-Call the Kilo AI Gateway from Java through its OpenAI-compatible API. The starter provides an auto-configured client for chat, streaming, and model discovery, built on the JDK HTTP client and Jackson. No Kilo Code or OpenCode installation is required.
+Call the Kilo AI Gateway from Java through its OpenAI-compatible API. The starter provides an auto-configured client for chat, streaming, and model discovery, built on the JDK HTTP client and Jackson.
 
 ## Features
 
