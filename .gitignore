@@ -7,3 +7,7 @@
 *.log
 local.properties
 **/gradle.properties.local
+
+# Local development instructions and working notes
+AGENTS.md
+.local/
